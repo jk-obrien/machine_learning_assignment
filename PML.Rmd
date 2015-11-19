@@ -1,0 +1,64 @@
+---
+title: "Machine Learning: Course Project"
+output: html_document
+---
+
+Do all the set-up stuff first.
+
+```{r init, echo=FALSE}
+set.seed(77412)
+library(caret)
+options(width=180)
+train <- read.csv("pml-training.csv")
+```
+
+There are many instances of the string "#DIV/0!" and of the empty string "".
+Let's treat those as NA.
+```{r clean}
+train[train==""]        <- NA
+train[train=="#DIV/0!"] <- NA
+```
+
+Many of the columns are now almost completely filled with NAs. Make a function
+to measure this and then a histogram to see how the proportion of NAs is
+distributed.
+```{r nas}
+na_prop <- function(x) sum(is.na(x))/length(x)
+nas     <- sapply(train,na_prop)
+hist(nas, xlab="Proportion of NA values", main="Histogram of NA Proportions")
+```
+
+The histogram shows that the variables are divided into those with 90% or more
+NA values, and those with 10% or less - in fact inspection of the latter group
+shows that none of them have any NA values. Continue the study using only this
+group as predictors, but save the list of column names so we can remove them
+from the test set also later on.
+```{r slim}
+droppedCols <- names(nas[nas>0.9])
+train       <- train[names(nas[nas==0])]
+```
+
+The first seven variables remaining in `train` are the row numbers, the
+particpants' names, and various types of time-stamps and window variables.
+Inspection (not shown) of these indicates that most of them will not be of much
+value for predition of the `classe` variable. Even if they were, the aim of the
+study is to use the motion sensor data for this purpose, so we will try to
+achieve this and remove those seven variables also. Again, we add the column
+names to our list.
+```{r seven}
+droppedCols <- c(droppedCols, names(train)[1:7])
+train       <- train[-1:-7]
+```
+
+Lastly, check the remaining variables for low variance and for high correlations
+among themselves.
+```{r varCor}
+nearZeroVar(train)  # No low variance columns found.
+
+corMat      <- cor(train[-dim(train)[2]])
+hiCor       <- findCorrelation(corMat)
+droppedCols <- c(droppedCols, names(train)[hiCor])
+train       <- train[-hiCor]
+```
+
+
