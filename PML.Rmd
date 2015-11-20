@@ -61,4 +61,35 @@ droppedCols <- c(droppedCols, names(train)[hiCor])
 train       <- train[-hiCor]
 ```
 
+Have a look at the data that we have left for unusual distributions, skew, etc.
+```{r inspect, warning=FALSE}
+library(reshape2)
+hist_data <- melt(train[,-46])
+ggplot(hist_data, aes(x=value)) +
+    facet_wrap(~variable, scales="free_x") +
+    geom_histogram()
+```
+
+There seems to be a lot of skew in some variables (e.g. gryos_dumbbell_y) but as
+the random forest approach is not sensitive to skew and as there seem to be no
+other obvious problems we will not apply any transformations to the data.
+
+Divide the training set into two - one set for training, and another for
+validation.
+```{r slice}
+divInd <- createDataPartition(y=train$classe, p=0.7, list=FALSE)
+tset   <- train[ divInd,]
+vset   <- train[-divInd,]
+```
+
+Now we are ready to carry out the training. We will use random forests.
+```{r forest, cache=TRUE}
+rfMod <- train(
+    y=tset$classe, x=tset[,-46], allowParallel=TRUE, do.trace=TRUE,
+    trControl = trainControl(method = "cv", number = 5)
+)
+rfMod
+```
+
+
 
