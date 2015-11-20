@@ -74,7 +74,7 @@ There seems to be a lot of skew in some variables (e.g. gryos_dumbbell_y) but as
 the random forest approach is not sensitive to skew and as there seem to be no
 other obvious problems we will not apply any transformations to the data.
 
-Divide the training set into two - one set for training, and another for
+Divide the training set into two - one set for training, and another for cross
 validation.
 ```{r slice}
 divInd <- createDataPartition(y=train$classe, p=0.7, list=FALSE)
@@ -91,5 +91,22 @@ rfMod <- train(
 rfMod
 ```
 
+Estimate our out of sample error using cross-validation against the random
+subset, `vset`, which we set aside earlier.
+```{r validate}
+predV   <- predict(rfMod, vset)
+correct <- predV==vset$classe
+oos     <- 1 - sum(correct)/length(correct)
+table(predV, correct)
+```
+
+Finally, load the test data, remove the same columns we removed from the
+training data, and then make our predictions.
+
+```{r test}
+test  <- read.csv("pml-testing.csv")
+test  <- test[ , -which(names(test) %in% droppedCols) ]
+predT <- predict(rfMod, test)
+```
 
 
