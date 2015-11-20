@@ -3,24 +3,30 @@ title: "Machine Learning: Course Project"
 output: html_document
 ---
 
-Do all the set-up stuff first.
-
-```{r init, echo=FALSE}
+```{r init}
 set.seed(77412)
-library(caret)
-options(width=180)
+library(caret, quietly=TRUE)
 train <- read.csv("pml-training.csv")
 ```
 
-There are many instances of the string "#DIV/0!" and of the empty string "".
-Let's treat those as NA.
+#Summary
+The data loaded above is a large set of `r dim(train)[1]` observations and
+`r dim(train)[2]` variables gathered from motion sensors attached to volunteers
+who were performing weight lifting exercises. Full details are [here](http://groupware.les.inf.puc-rio.br/har).
+The aim of this project is to build a model that can predict the exercise being
+performed from the motion sensor data.
+
+
+##Data Cleaning
+There are many instances of the string "#DIV/0!" and of the empty string "" in
+the data. Let's treat those as NA values.
 ```{r clean}
 train[train==""]        <- NA
 train[train=="#DIV/0!"] <- NA
 ```
 
 Many of the columns are now almost completely filled with NAs. Make a function
-to measure this and then a histogram to see how the proportion of NAs is
+to measure this and then a histogram to see how the proportions of NAs are
 distributed.
 ```{r nas}
 na_prop <- function(x) sum(is.na(x))/length(x)
@@ -28,25 +34,30 @@ nas     <- sapply(train,na_prop)
 hist(nas, xlab="Proportion of NA values", main="Histogram of NA Proportions")
 ```
 
-The histogram shows that the variables are divided into those with 90% or more
-NA values, and those with 10% or less - in fact inspection of the latter group
-shows that none of them have any NA values. Continue the study using only this
-group as predictors, but save the list of column names so we can remove them
-from the test set also later on.
+**Figure 1** Histogram showing the proportion of NA values in each variable
+after data cleaning.
+
+The histogram shows that the variables are divided into those with
+90% or more NA values, and those with 10% or less - in fact inspection of the
+latter group shows that none of them have any NA values. Continue the study
+using only this group of variables as predictors, but save the names of the
+dropped variables so we can remove them from the test set also later on.
+
 ```{r slim}
-droppedCols <- names(nas[nas>0.9])
+droppedVars <- names(nas[nas>0.9])
 train       <- train[names(nas[nas==0])]
 ```
 
+##Feature Selection
 The first seven variables remaining in `train` are the row numbers, the
-particpants' names, and various types of time-stamps and window variables.
+participants' names, and various types of time-stamps and window variables.
 Inspection (not shown) of these indicates that most of them will not be of much
 value for predition of the `classe` variable. Even if they were, the aim of the
 study is to use the motion sensor data for this purpose, so we will try to
 achieve this and remove those seven variables also. Again, we add the column
 names to our list.
 ```{r seven}
-droppedCols <- c(droppedCols, names(train)[1:7])
+droppedVars <- c(droppedVars, names(train)[1:7])
 train       <- train[-1:-7]
 ```
 
@@ -57,12 +68,12 @@ nearZeroVar(train)  # No low variance columns found.
 
 corMat      <- cor(train[-dim(train)[2]])
 hiCor       <- findCorrelation(corMat)
-droppedCols <- c(droppedCols, names(train)[hiCor])
+droppedVars <- c(droppedVars, names(train)[hiCor])
 train       <- train[-hiCor]
 ```
 
 Have a look at the data that we have left for unusual distributions, skew, etc.
-```{r inspect, warning=FALSE}
+```{r inspect, warning=FALSE, fig.width=8}
 library(reshape2)
 hist_data <- melt(train[,-46])
 ggplot(hist_data, aes(x=value)) +
@@ -70,29 +81,43 @@ ggplot(hist_data, aes(x=value)) +
     geom_histogram()
 ```
 
+**Figure 2** Histograms of remaining variables in the training set.
+
 There seems to be a lot of skew in some variables (e.g. gryos_dumbbell_y) but as
 the random forest approach is not sensitive to skew and as there seem to be no
 other obvious problems we will not apply any transformations to the data.
 
-Divide the training set into two - one set for training, and another for cross
-validation.
+##Data Slicing
+Divide the training set into two - one set (70%) for training, and another (30%)
+for cross validation. Testing will be performed on a further data set which has
+not yet been loaded.
 ```{r slice}
 divInd <- createDataPartition(y=train$classe, p=0.7, list=FALSE)
 tset   <- train[ divInd,]
 vset   <- train[-divInd,]
 ```
 
-Now we are ready to carry out the training. We will use random forests.
+##Model Building
+Now we are ready to carry out the training. After some initial experimentation
+(not shown here) we will use random forests.
 ```{r forest, cache=TRUE}
 rfMod <- train(
-    y=tset$classe, x=tset[,-46], allowParallel=TRUE, do.trace=TRUE,
+    y=tset$classe, x=tset[,-46], allowParallel=TRUE,
     trControl = trainControl(method = "cv", number = 5)
 )
-rfMod
+rfMod$finalModel
 ```
 
-Estimate our out of sample error using cross-validation against the random
-subset, `vset`, which we set aside earlier.
+## Out of Sample Error
+The out of bag (OOB) error is very low at 0.8%. It has been argued, for example
+[here](https://www.stat.berkeley.edu/~breiman/RandomForests/cc_home.htm#ooberr)
+that the OOB error provides an unbiased estimate of the test set error, while
+others, for example [here](http://www.scirp.org/journal/PaperDownload.aspx?paperID=8072)
+have argued that this is not always the case. We will take no position in this
+debate here but will supply both the OOB and out of sample (OOS) estimates.
+
+We estimate our out of sample error using cross-validation against the random
+subssample, `vset`, which we set aside earlier.
 ```{r validate}
 predV   <- predict(rfMod, vset)
 correct <- predV==vset$classe
@@ -100,13 +125,15 @@ oos     <- 1 - sum(correct)/length(correct)
 table(predV, correct)
 ```
 
+This gives us a value of `r oos*100`% for our OOS error, slightly higher than
+the OOB error.
+
+## Prediction against Test Set
 Finally, load the test data, remove the same columns we removed from the
 training data, and then make our predictions.
 
 ```{r test}
 test  <- read.csv("pml-testing.csv")
-test  <- test[ , -which(names(test) %in% droppedCols) ]
+test  <- test[ , -which(names(test) %in% droppedVars) ]
 predT <- predict(rfMod, test)
 ```
-
-
