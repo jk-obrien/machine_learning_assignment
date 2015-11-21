@@ -39,10 +39,10 @@ hist(nas, xlab="Proportion of NA values", main="Histogram of NA Proportions")
 after data cleaning.
 
 The histogram shows that the variables are divided into those with
-90% or more NA values, and those with 10% or less - in fact inspection of the
-latter group shows that none of them have any NA values. Continue the study
-using only this group of variables as predictors, but save the names of the
-dropped variables so we can remove them from the test set also later on.
+90% or more NA values, and those with 10% or less - in fact closer inspection
+of the latter group shows that none of them have any NA values. Continue the 
+study using only this group of variables as predictors, but save the names of 
+the dropped variables so we can also remove them from the test set later on.
 
 ```{r slim}
 droppedVars <- names(nas[nas>0.9])
@@ -73,6 +73,7 @@ droppedVars <- c(droppedVars, names(train)[hiCor])
 train       <- train[-hiCor]
 ```
 
+## Data Transformation
 Have a look at the data that we have left for unusual distributions, skew, etc.
 ```{r inspect, warning=FALSE, message=FALSE, fig.height=8, fig.width=9}
 library(reshape2)
@@ -84,10 +85,10 @@ ggplot(hist_data, aes(x=value)) +
 
 **Figure 2** Histograms of remaining variables in the training set.
 
-There seems to be a lot of skew in some variables (e.g. gryos_dumbbell_y) but if
-we use the random forest algorithm, our approach is not sensitive to skew and as 
-there seem to be no other obvious problems we will not apply any transformations 
-to the data.
+There seems to be a lot of skew in some variables (e.g. gryos_dumbbell_y) but
+if we use the random forest algorithm, our approach will not be sensitive to 
+skew and, as there seem to be no other obvious problems, we will not apply any
+transformations to the data.
 
 ## Data Slicing
 Divide the training set in two - one set (70%) for training, and another (30%)
@@ -100,6 +101,10 @@ vset   <- train[-divInd,]
 ```
 
 ## Model Building
+```{r rflib, echo=FALSE, message=FALSE}
+library(randomForest)
+```
+
 Now we are ready to carry out the training. After some initial experimentation
 (not shown here) we will use random forests.
 ```{r forest, cache=TRUE, message=FALSE}
@@ -128,8 +133,8 @@ oos     <- 1 - sum(correct)/length(correct)
 table(predV, vset$classe)
 ```
 
-This gives us a value of `r round(oos*100, 4)`% for our OOS error, which is reasonably 
-close to the OOB error.
+This gives us a value of `r round(oos*100, 4)`% for our OOS error estimate,
+which is a little higher than the OOB error, but still very small.
 
 ## Prediction against Test Set
 Finally, load the test data, remove the same columns we removed from the training data, and
